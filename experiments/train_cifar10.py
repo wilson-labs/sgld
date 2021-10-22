@@ -96,7 +96,7 @@ def main(seed=None, device=0, data_dir=None, val_size=.1, aug=True, epochs=1,
   if data_dir is None and os.environ.get('DATADIR') is not None:
       data_dir = os.environ.get('DATADIR')
 
-  samples_dir = Path(samples_dir or '.') / 'samples'
+  samples_dir = Path(samples_dir or '.') / '.samples'
   samples_dir.mkdir()
 
   torch.backends.cudnn.benchmark = True
