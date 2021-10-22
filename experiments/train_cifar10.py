@@ -90,6 +90,34 @@ def test(data_loader, net, criterion, device=None):
   }
 
 
+@torch.no_grad()
+def test_bma(net, data_loader, samples_dir, device=None):
+  net.eval()
+
+  ens_logits = []
+
+  for sample_path in tqdm(Path(samples_dir).rglob('*.pt')):
+    net.load_state_dict(torch.load(sample_path))
+
+    all_logits = []
+    all_Y = []
+    for X, Y in tqdm(data_loader, leave=False):
+      X, Y = X.to(device), Y.to(device)
+      all_logits.append(net(X))
+      all_Y.append(Y)
+    all_logits = torch.cat(all_logits)
+    all_Y = torch.cat(all_Y)
+
+    ens_logits.append(all_logits)
+
+  ens_logits = torch.stack(ens_logits).softmax(dim=-1).mean(dim=0)
+  Y_pred = ens_logits.argmax(dim=-1)
+
+  acc = (Y_pred == all_Y).sum().item() / Y_pred.size(0)
+
+  return { 'acc': acc }  
+
+
 def main(seed=None, device=0, data_dir=None, val_size=.1, aug=True, epochs=1,
          batch_size=128, lr=.5, momentum=.9, weight_decay=5e-4, n_cycles=4,
          temperature=1/50000, n_samples=12, samples_dir=None):
@@ -147,6 +175,11 @@ def main(seed=None, device=0, data_dir=None, val_size=.1, aug=True, epochs=1,
     test_metrics = test(test_loader, net, criterion, device=device)
 
     logging.info(f"(Epoch {e}) Val/Test: {val_metrics['acc']:.4f} / {test_metrics['acc']:.4f}")
+
+  bma_val_metrics = test_bma(net, val_loader, samples_dir, device=device)
+  bma_test_metrics = test_bma(net, test_loader, samples_dir, device=device)
+
+  logging.info(f"BMA Val/Test: {bma_val_metrics['acc']:.4f} / {bma_test_metrics['acc']:.4f}")
 
 
 if __name__ == '__main__':
