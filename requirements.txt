@@ -1,0 +1,11 @@
+jupyterlab
+ipywidgets
+tqdm
+fire
+seaborn
+numpy
+scipy
+pandas
+scikit-learn
+torch
+torchvision
