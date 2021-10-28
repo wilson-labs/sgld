@@ -4,14 +4,13 @@ import random
 import numpy as np
 from tqdm.auto import tqdm
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, random_split
-from torchvision.datasets import CIFAR10
-import torchvision.transforms as transforms
+from torch.utils.data import DataLoader
+
 
 from sgld.models import ResNet18
 from sgld.optim import SGLD
 from sgld.optim.lr_scheduler import CosineLR
+from sgld.nn import GaussianPriorCELoss
 
 
 def set_seeds(seed=None):
@@ -22,21 +21,24 @@ def set_seeds(seed=None):
     torch.cuda.manual_seed_all(seed)
 
 
-def train_test_split(dataset, val_size=.1, seed=None):
-    N = len(dataset)
-    N_test = int(val_size * N)
-    N -= N_test
+def get_cifar10(root=None, val_size=0, seed=None, augment=True):
+  from torchvision.datasets import CIFAR10
+  import torchvision.transforms as transforms
+  from torch.utils.data import random_split
+  
+  def train_test_split(dataset, val_size=.1, seed=None):
+      N = len(dataset)
+      N_test = int(val_size * N)
+      N -= N_test
 
-    if seed is not None:
-        train, test = random_split(dataset, [N, N_test], 
-                                   generator=torch.Generator().manual_seed(seed))
-    else:
-        train, test = random_split(dataset, [N, N_test])
+      if seed is not None:
+          train, test = random_split(dataset, [N, N_test], 
+                                    generator=torch.Generator().manual_seed(seed))
+      else:
+          train, test = random_split(dataset, [N, N_test])
 
-    return train, test
+      return train, test
 
-
-def get_cifar10(root=None, val_size=.1, seed=42, augment=True):
   _CIFAR_TRAIN_TRANSFORM = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
@@ -75,17 +77,16 @@ def test(data_loader, net, criterion, device=None):
     
     f_hat = net(X)
     Y_pred = f_hat.argmax(dim=-1)
-    loss = criterion(f_hat, Y)
+    loss = criterion(f_hat, Y, N=X.size(0))
 
     N += Y.size(0)
     Nc += (Y_pred == Y).sum().item()
     total_loss += loss
 
-  avg_loss = total_loss.item() / N
   acc = Nc / N
 
   return {
-    'avg_loss': avg_loss,
+    'total_loss': total_loss.item(),
     'acc': acc,
   }
 
@@ -96,7 +97,7 @@ def test_bma(net, data_loader, samples_dir, device=None):
 
   ens_logits = []
 
-  for sample_path in tqdm(Path(samples_dir).rglob('*.pt')):
+  for sample_path in tqdm(Path(samples_dir).rglob('*.pt'), leave=False):
     net.load_state_dict(torch.load(sample_path))
 
     all_logits = []
@@ -115,36 +116,34 @@ def test_bma(net, data_loader, samples_dir, device=None):
 
   acc = (Y_pred == all_Y).sum().item() / Y_pred.size(0)
 
-  return { 'acc': acc }  
+  return { 'acc': acc }
 
 
-def main(seed=None, device=0, data_dir=None, val_size=.1, aug=True, epochs=1,
-         batch_size=128, lr=.5, momentum=.9, weight_decay=5e-4, n_cycles=4,
-         temperature=1/50000, n_samples=12, samples_dir=None):
+def main(seed=None, device=0, data_dir=None, aug=False, epochs=1,
+         batch_size=128, lr=.5, momentum=.9, prior_scale=0.15, n_cycles=4,
+         temperature=1, n_samples=12, samples_dir=None):
   if data_dir is None and os.environ.get('DATADIR') is not None:
       data_dir = os.environ.get('DATADIR')
-
-  samples_dir = Path(samples_dir or '.') / '.samples'
-  samples_dir.mkdir()
 
   torch.backends.cudnn.benchmark = True
 
   set_seeds(seed)
   device = f"cuda:{device}" if (device >= 0 and torch.cuda.is_available()) else "cpu"
 
-  train_data, val_data, test_data = get_cifar10(root=data_dir, val_size=val_size,
-                                                seed=seed, augment=bool(aug))
+  samples_dir = Path(samples_dir or '.') / '.samples'
+  samples_dir.mkdir()
+
+  train_data, test_data = get_cifar10(root=data_dir, seed=seed, augment=bool(aug))
+  N = len(train_data)
   
   train_loader = DataLoader(train_data, batch_size=batch_size, num_workers=2,
                             shuffle=True)
-  val_loader = DataLoader(val_data, batch_size=batch_size, num_workers=2)
   test_loader = DataLoader(test_data, batch_size=batch_size, num_workers=2)
 
   net = ResNet18(num_classes=10).to(device)
-  criterion = nn.CrossEntropyLoss()
+  criterion = GaussianPriorCELoss(net.parameters(), prior_scale=prior_scale)
 
-  sgld = SGLD(net.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum,
-              temperature=temperature)
+  sgld = SGLD(net.parameters(), lr=lr, momentum=momentum, temperature=temperature / N)
   sgld_scheduler = CosineLR(sgld, n_cycles=n_cycles, n_samples=n_samples,
                             T_max=len(train_loader) * epochs)
 
@@ -156,8 +155,8 @@ def main(seed=None, device=0, data_dir=None, val_size=.1, aug=True, epochs=1,
       sgld.zero_grad()
 
       f_hat = net(X)
-      loss = criterion(f_hat, Y)
-      
+      loss = criterion(f_hat, Y, N=N)
+
       loss.backward()
 
       if sgld_scheduler.get_last_beta() < sgld_scheduler.beta:
@@ -171,15 +170,13 @@ def main(seed=None, device=0, data_dir=None, val_size=.1, aug=True, epochs=1,
       sgld_scheduler.step()
 
     ## NOTE: Only for sanity checks, not BMA.
-    val_metrics = test(val_loader, net, criterion, device=device)
     test_metrics = test(test_loader, net, criterion, device=device)
 
-    logging.info(f"(Epoch {e}) Val/Test: {val_metrics['acc']:.4f} / {test_metrics['acc']:.4f}")
+    logging.info(f"(Epoch {e}) : {test_metrics['acc']:.4f}")
 
-  bma_val_metrics = test_bma(net, val_loader, samples_dir, device=device)
   bma_test_metrics = test_bma(net, test_loader, samples_dir, device=device)
 
-  logging.info(f"BMA Val/Test: {bma_val_metrics['acc']:.4f} / {bma_test_metrics['acc']:.4f}")
+  logging.info(f"Final BMA Test: {bma_test_metrics['acc']:.4f}")
 
 
 if __name__ == '__main__':

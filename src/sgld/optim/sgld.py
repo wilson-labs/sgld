@@ -35,7 +35,7 @@ def sgld(params: List[Tensor],
             buf.mul_(1 - momentum).add_(d_p, alpha=-lr)
             if noise:
                 eps = torch.randn_like(d_p)
-                buf.add_(eps, alpha=math.sqrt(2 * lr * momentum) * temperature)
+                buf.add_(eps, alpha=math.sqrt(2 * lr * momentum * temperature))
 
             param.add_(buf)
         else:
@@ -43,7 +43,7 @@ def sgld(params: List[Tensor],
 
             if noise:
                 eps = torch.randn_like(d_p)
-                param.add_(eps, alpha=math.sqrt(2 * lr) * temperature)
+                param.add_(eps, alpha=math.sqrt(2 * lr * temperature))
 
 
 class SGLD(SGD):
