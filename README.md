@@ -1,18 +1,19 @@
 # SGLD
 
-This is a standalone and easy-to-extend implementation of SGLD (plus a few
-variants).
+An implementation of SGLD (and variants) with two key purposes in mind:
+1. Easy to cherry-pick into your own *research* code for baseline evaluation.
+2. Clean enough for dirty prototyping with fancy/ad-hoc extensions.
 
 ## Setup
 
-Use the [requirements.txt](./requirements.txt) to add common dependencies to
+Use the [environment.yml](./environment.yml) to add common dependencies to
 your working Python environment.
 
 ```shell
-pip install -r requirements.txt
+conda env create -n <env_name>
 ```
 
-Add the `slgd` package to PYTHONPATH as
+Add the `slgd` package to PYTHONPATH for imports.
 
 ```shell
 export PYTHONPATH="$(pwd)/src:${PYTHONPATH}"
@@ -20,35 +21,20 @@ export PYTHONPATH="$(pwd)/src:${PYTHONPATH}"
 
 ## Usage
 
-### Toy Example
+### Toy SGLD Visualization
 
 See [viz_sgld.ipynb](./notebooks/viz_sgld.ipynb).
 
-### CIFAR-10
+### Full Example
+
+Full examples which are easy to modify.
+
+- **SGLD**: A full pipeline of using SGLD is provided in [train_sgld.py](./experiments/train_sgld.py)
+
+- **cSGLD**: A full pipeline of using SGLD + cyclical step size schedule (cSGLD) is provided in [train_csgld.py](./experiments/train_csgld.py)
 
 See [train_cifar10.py](./experiments/train_cifar10_csgld.py) which using cSGHMC to
 train on [CIFAR-10](https://www.cs.toronto.edu/~kriz/cifar.html).
-
-#### No Data Augmentation
-
-The default arguments should be enough to achieve ~85% with no tempering and
-no data augmentation.
-
-```shell
-python experiments/train_cifar10_csgld.py --epochs=1000
-```
-
-#### With Data Augmentation
-
-Use the following additional CLI arguments to achieve ~94% with data augmentation
-and tempering.
-
-```shell
-python experiments/train_cifar10_csgld.py --epochs=1000 \
-                                          --aug=1 \
-                                          --momentum=0.95 \
-                                          --temperature=2e-5
-```
 
 ## License
 

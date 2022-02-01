@@ -31,12 +31,15 @@ class ABAnnealingLR(_LRScheduler):
       return self.base_lrs
 
     new_lrs = []
-    for base_lr, _ in zip(self.base_lrs, self.optimizer.param_groups):
-      b = self.T_max / ((base_lr / self.final_lr) * math.exp(1/self.gamma) - 1.)
-      a = base_lr * b**self.gamma
+    for base_lr, group in zip(self.base_lrs, self.optimizer.param_groups):
+      if self.last_epoch > self.T_max:
+        new_lrs.append(group['lr'])
+      else:
+        b = self.T_max / ((base_lr / self.final_lr) * math.exp(1/self.gamma) - 1.)
+        a = base_lr * b**self.gamma
 
-      new_lr = a / (b + self.last_epoch)**self.gamma
-      new_lrs.append(new_lr)
+        new_lr = a / (b + self.last_epoch)**self.gamma
+        new_lrs.append(new_lr)
 
     return new_lrs
 

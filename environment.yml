@@ -1,0 +1,16 @@
+channels:
+  - conda-forge
+  - anaconda
+dependencies:
+  # - cmake  ## Only install on demand.
+  - python<3.10
+  - pip
+  - pip:
+    - jupyterlab
+    - ipywidgets
+    - tqdm
+    - fire
+    - seaborn
+    - numpy
+    - torch
+    - torchvision

@@ -61,7 +61,7 @@ class SGLD(SGD):
 
         self.T = temperature
         if momentum != 0:
-            self.resample_momentum()
+            self.reset_momentum()
 
     @torch.no_grad()
     def step(self, closure=None, noise=True):
@@ -105,7 +105,7 @@ class SGLD(SGD):
         return loss
 
     @torch.no_grad()
-    def resample_momentum(self):
+    def reset_momentum(self):
         for group in self.param_groups:
             momentum = group['momentum']
 
@@ -113,6 +113,6 @@ class SGLD(SGD):
 
             for p in group['params']:
                 state = self.state[p]
-                state['momentum_buffer'] = torch.randn_like(p)
+                state['momentum_buffer'] = torch.zeros_like(p)
 
         return self
