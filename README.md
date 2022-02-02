@@ -33,9 +33,6 @@ Full examples which are easy to modify.
 
 - **cSGLD**: A full pipeline of using SGLD + cyclical step size schedule (cSGLD) is provided in [train_csgld.py](./experiments/train_csgld.py)
 
-See [train_cifar10.py](./experiments/train_cifar10_csgld.py) which using cSGHMC to
-train on [CIFAR-10](https://www.cs.toronto.edu/~kriz/cifar.html).
-
 ## License
 
 MIT
