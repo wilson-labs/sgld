@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 
 import sgld.nn as snn
 from sgld.optim import SGLD
+from sgld.logging_utils import set_logging
 from sgld.train_utils import set_seeds, test_sample, test_bma
 from sgld.dataset import get_cifar10
 
@@ -57,7 +58,10 @@ def run_sgld(train_loader, test_loader, net, likelihood, prior, samples_dir,
 def main(seed=None, device=0, data_dir=None, augment=True, batch_size=128,
          ckpt_path=None, prior_scale=1, temperature=1,
          epochs=1000, lr=1e-6, momentum=.9, burn_in=500, n_samples=50, samples_dir=None):
+  
+  set_logging()
   set_seeds(seed)
+
   device = f"cuda:{device}" if (device >= 0 and torch.cuda.is_available()) else "cpu"
   torch.backends.cudnn.benchmark = True
 
@@ -103,11 +107,4 @@ def main(seed=None, device=0, data_dir=None, augment=True, batch_size=128,
 
 if __name__ == '__main__':
   import fire
-  import os
-  import sys
-
-  logging.basicConfig(
-    stream=sys.stdout, format='[%(asctime)s] %(levelname)s: %(message)s',
-    level=getattr(logging, os.environ.get('LOGLEVEL', 'INFO'), logging.INFO))
-  
   fire.Fire(main)
