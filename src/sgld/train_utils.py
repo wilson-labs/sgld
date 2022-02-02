@@ -78,4 +78,4 @@ def test_bma(samples_dir, data_loader, net, likelihood, device=None):
     bma_probs.cpu().numpy(), num_bins=30)
   bma_acc = (bma_probs.argmax(dim=-1) == all_targets).float().mean()
 
-  return { 'bma_nll': bma_nll, 'bma_acc': bma_acc, 'bma_ece': bma_ece }
+  return { 'bma_nll': bma_nll.item(), 'bma_acc': bma_acc.item(), 'bma_ece': bma_ece }

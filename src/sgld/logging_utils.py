@@ -1,30 +1,71 @@
-import os
+import logging
 from logging.config import dictConfig
+import os
+from pathlib import Path
+import time
 
 
 __all__ = ['set_logging']
 
 
-def set_logging():
-    dictConfig(_CONFIG)
+class MetricsFilter(logging.Filter):
+    def __init__(self, extra_key='metrics', invert=False):
+        super().__init__()
+        self.extra_key = extra_key
+        self.invert = invert
+
+    def filter(self, record):
+        should_pass = hasattr(record, self.extra_key) and getattr(record, self.extra_key)
+        if self.invert:
+            should_pass = not should_pass
+        return should_pass
 
 
-_CONFIG = {
-    'version': 1,
-    'formatters': {
-        'console': {
-            'format': '[%(asctime)s] %(levelname)s: %(message)s',
+class MetricsFileHandler(logging.FileHandler):
+    def emit(self, record):
+        if hasattr(record, 'prefix'):
+            record.msg = {f'{record.prefix}/{k}': v for k, v in record.msg.items()}
+        record.msg['timestamp_ns'] = time.time_ns()
+        return super().emit(record)
+
+
+def set_logging(root):
+    root = Path(root)
+    _CONFIG = {
+        'version': 1,
+        'formatters': {
+            'console': {
+                'format': '[%(asctime)s] (%(funcName)s:%(levelname)s) %(message)s',
+            },
         },
-    },
-    'handlers': {
-        'stdout': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'console',
-            'stream': 'ext://sys.stdout',
+        'filters': {
+            'metrics': {
+                '()': MetricsFilter,
+            },
+            'nometrics': {
+                '()': MetricsFilter,
+                'invert': True,
+            },
         },
-    },
-    'root': {
-        'handlers': ['stdout'],
-        'level': os.environ.get('LOGLEVEL', 'INFO'),
+        'handlers': {
+            'stdout': {
+                '()': logging.StreamHandler,
+                'formatter': 'console',
+                'stream': 'ext://sys.stdout',
+                'filters': ['nometrics'],
+            },
+            'metrics_file': {
+                '()': MetricsFileHandler,
+                'filename': str(root / 'metrics.log'),
+                'filters': ['metrics'],
+            },
+        },
+        'loggers': {
+            '': {
+                'handlers': ['stdout', 'metrics_file'],
+                'level': os.environ.get('LOGLEVEL', 'INFO'),
+            },
+        },
     }
-}
+
+    dictConfig(_CONFIG)

@@ -1,4 +1,5 @@
 import logging
+import yaml
 import os
 from pathlib import Path
 from uuid import uuid4
@@ -38,28 +39,35 @@ def run_sgld(train_loader, test_loader, net, likelihood, prior, samples_dir,
       sgld.step()
 
       if i % 100 == 0:
-        metrics = {'epoch': e, 'minibatch': i,
-                   'nll': nll.item(), 'nlp': nlp.item(), 'loss': loss.item()}
-        logging.debug({f'sgld/train/{k}': v for k, v in metrics.items() })
+        metrics = {'nll': nll.item(), 'nlp': nlp.item(), 'loss': loss.item()}
+        logging.info(f'Train Loss: {metrics["loss"]:.4f}')
+        logging.info(dict(epoch=e, minibatch=i, **metrics), extra=dict(metrics=True, prefix='sgld/train'))
 
     test_metrics = test_sample(test_loader, net, likelihood, device=device)
-    logging.info({f'sgld/test/{k}': v for k, v in test_metrics.items() })
+    logging.info(f'Test Acc: {test_metrics["acc"]:.4f}')
+    logging.info(dict(epoch=e, **test_metrics), extra=dict(metrics=True, prefix='csgld/test'))
 
     if e + 1 > burn_in and (e + 1 - burn_in) % sample_int == 0:
       torch.save(net.state_dict(), samples_dir / f'e{e}.sample.pt')
 
       bma_test_metrics = test_bma(samples_dir, test_loader, net, likelihood, device=device)
-      logging.info({f'sgld/test/{k}': v for k, v in bma_test_metrics.items() })
+      logging.info(f'BMA Test Acc: {bma_test_metrics["bma_acc"]:.4f}')
+      logging.info(dict(epoch=e, **bma_test_metrics), extra=dict(metrics=True, prefix='csgld/test'))
 
   bma_test_metrics = test_bma(net, test_loader, samples_dir, nll_criterion=likelihood, device=device)
-  logging.info({f'sgld/test/{k}': v for k, v in bma_test_metrics.items() })
+  logging.info(f'BMA Test Acc: {bma_test_metrics["bma_acc"]:.4f}')
+  logging.info(dict(epoch=e, **bma_test_metrics), extra=dict(metrics=True, prefix='csgld/test'))
 
 
 def main(seed=None, device=0, data_dir=None, augment=True, batch_size=128,
          ckpt_path=None, prior_scale=1, temperature=1,
-         epochs=1000, lr=1e-6, momentum=.9, burn_in=500, n_samples=50, samples_dir=None):
+         epochs=1000, lr=1e-6, momentum=.9, burn_in=500, n_samples=50):
   
-  set_logging()
+  log_dir = Path.cwd() / '.log' / f'csgld-{str(uuid4())[:8]}'
+  samples_dir = log_dir / 'samples'
+  samples_dir.mkdir(parents=True)
+
+  set_logging(root=log_dir)
   set_seeds(seed)
 
   device = f"cuda:{device}" if (device >= 0 and torch.cuda.is_available()) else "cpu"
@@ -67,24 +75,21 @@ def main(seed=None, device=0, data_dir=None, augment=True, batch_size=128,
 
   if data_dir is None and os.environ.get('DATADIR') is not None:
     data_dir = os.environ.get('DATADIR')
-    logging.warning(f'Using default data directory from environment "{data_dir}".')
+    logging.debug(f'Using default data directory from environment "{data_dir}".')
 
-  samples_dir = Path(samples_dir or f'./.log/sgld-{str(uuid4())[:8]}') / 'samples'
-  samples_dir.mkdir(parents=True)
-  logging.info(f'Storing samples in "{samples_dir.resolve()}".')
-
-  logging.info({
-    'seed': seed,
-    'device': device,
-    'augment': augment,
-    'batch_size': batch_size,
-    'prior_scale': prior_scale,
-    'temperature': temperature,
-    'lr': lr,
-    'momentum': momentum,
-    'burn_in': burn_in,
-    'n_samples': n_samples,
-  })
+  with open(log_dir / 'config.yaml', 'w') as f:
+    yaml.safe_dump({
+      'seed': seed,
+      'augment': augment,
+      'batch_size': batch_size,
+      'prior_scale': prior_scale,
+      'temperature': temperature,
+      'lr': lr,
+      'momentum': momentum,
+      'burn_in': burn_in,
+      'n_samples': n_samples,
+    }, f, indent=2)
+    logging.info(f'Experiment stored in "{log_dir.resolve()}".')
 
   train_data, test_data = get_cifar10(root=data_dir, augment=bool(augment))
 
