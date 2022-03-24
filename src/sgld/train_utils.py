@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from .metrics import ece
 
 
-def set_seeds(seed=None):
+def random_seed_all(seed=None):
   if seed is not None and seed >= 0:
     import random
     random.seed(seed)

@@ -10,8 +10,8 @@ from torch.utils.data import DataLoader
 import sgld.nn as snn
 from sgld.optim import SGLD
 from sgld.optim.lr_scheduler import CosineLR
-from sgld.logging_utils import set_logging
-from sgld.train_utils import set_seeds, test_sample, test_bma
+from sgld.logging import set_logging
+from sgld.train_utils import random_seed_all, test_sample, test_bma
 from sgld.dataset import get_cifar10
 
 
@@ -75,7 +75,7 @@ def main(seed=None, device=0, data_dir=None, augment=True, batch_size=128,
   samples_dir.mkdir(parents=True)
 
   set_logging(root=log_dir)
-  set_seeds(seed)
+  random_seed_all(seed)
 
   device = f"cuda:{device}" if (device >= 0 and torch.cuda.is_available()) else "cpu"
   torch.backends.cudnn.benchmark = True

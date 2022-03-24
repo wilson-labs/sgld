@@ -29,8 +29,7 @@ class MetricsFileHandler(logging.FileHandler):
         return super().emit(record)
 
 
-def set_logging(root):
-    root = Path(root)
+def set_logging(root, metrics_extra_key='metrics'):
     _CONFIG = {
         'version': 1,
         'formatters': {
@@ -41,9 +40,11 @@ def set_logging(root):
         'filters': {
             'metrics': {
                 '()': MetricsFilter,
+                'extra_key': metrics_extra_key,
             },
             'nometrics': {
                 '()': MetricsFilter,
+                'extra_key': metrics_extra_key,
                 'invert': True,
             },
         },
@@ -56,7 +57,7 @@ def set_logging(root):
             },
             'metrics_file': {
                 '()': MetricsFileHandler,
-                'filename': str(root / 'metrics.log'),
+                'filename': str(Path(root) / 'metrics.log'),
                 'filters': ['metrics'],
             },
         },
