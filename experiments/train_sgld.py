@@ -54,7 +54,7 @@ def run_sgld(train_loader, test_loader, net, likelihood, prior, samples_dir,
       logging.info(f'BMA Test Acc: {bma_test_metrics["bma_acc"]:.4f}')
       logging.info(dict(epoch=e, **bma_test_metrics), extra=dict(metrics=True, prefix='csgld/test'))
 
-  bma_test_metrics = test_bma(net, test_loader, samples_dir, nll_criterion=likelihood, device=device)
+  bma_test_metrics = test_bma(samples_dir, test_loader, net, likelihood, device=device)
   logging.info(f'BMA Test Acc: {bma_test_metrics["bma_acc"]:.4f}')
   logging.info(dict(epoch=e, **bma_test_metrics), extra=dict(metrics=True, prefix='csgld/test'))
 
